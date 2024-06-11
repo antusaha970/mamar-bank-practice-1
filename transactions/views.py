@@ -9,6 +9,7 @@ from django.db.models import Sum
 from django.views import View
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
+from core.models import Bank
 from .models import Transactions
 from accounts.models import UserBankAccount
 from .contants import DEPOSIT, LOAN, LOAN_PAID, WITHDRAWAL, SEND_MONEY, RECEIVE_MONEY
@@ -103,15 +104,21 @@ class WithdrawalMoneyView(TransactionCreateMixin):
         return initial
 
     def form_valid(self, form):
-        amount = form.cleaned_data.get('amount')
-        account = self.request.user.account
+        bank = Bank.objects.get(name="Jomuna")
+        if not bank.status:
+            amount = form.cleaned_data.get('amount')
+            account = self.request.user.account
 
-        account.balance -= amount
-        account.save(update_fields=['balance'])
+            account.balance -= amount
+            account.save(update_fields=['balance'])
 
-        messages.success(self.request, f"""{
-                         amount} is withdrawn from your account """)
-        return super().form_valid(form)
+            messages.success(self.request, f"""{
+                amount} is withdrawn from your account """)
+            return super().form_valid(form)
+        else:
+            messages.error(
+                self.request, f"""Can't withdraw money bank is bankrupt""")
+            return redirect("homepage")
 
 
 class LoanMoneyView(TransactionCreateMixin):
