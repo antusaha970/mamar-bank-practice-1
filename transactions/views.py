@@ -10,8 +10,9 @@ from django.views import View
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from .models import Transactions
-from .contants import DEPOSIT, LOAN, LOAN_PAID, WITHDRAWAL
-from .forms import DepositForm, WithdrawalForm, LoanRequestForm
+from accounts.models import UserBankAccount
+from .contants import DEPOSIT, LOAN, LOAN_PAID, WITHDRAWAL, SEND_MONEY, RECEIVE_MONEY
+from .forms import DepositForm, WithdrawalForm, LoanRequestForm, SendMoneyForm
 # Create your views here.
 
 
@@ -32,6 +33,38 @@ class TransactionCreateMixin(LoginRequiredMixin, CreateView):
         context = super().get_context_data(**kwargs)
         context["title"] = self.title
         return context
+
+
+class SendMoneyView(TransactionCreateMixin):
+    title = "Send money"
+    form_class = SendMoneyForm
+    template_name = 'transactions/send_money.html'
+
+    def get_initial(self):
+        initial = {
+            'transaction_type': SEND_MONEY
+        }
+        return initial
+
+    def form_valid(self, form):
+        amount = form.cleaned_data['amount']
+        account_no = form.cleaned_data['account_no']
+
+        receiver_account = UserBankAccount.objects.get(account_no=account_no)
+        receiver_account.balance += amount
+        receiver_account.save(update_fields=['balance'])
+
+        receiver_transaction = Transactions(
+            amount=amount, transaction_type=RECEIVE_MONEY, account=receiver_account, balance_after_transaction=receiver_account.balance)
+        receiver_transaction.save()
+
+        sender_account = self.request.user.account
+        sender_account.balance -= amount
+        sender_account.save(update_fields=['balance'])
+
+        messages.success(self.request, f"""{
+                         amount} has been sent to Account:  {account_no}""")
+        return super().form_valid(form)
 
 
 class DepositMoneyView(TransactionCreateMixin):
